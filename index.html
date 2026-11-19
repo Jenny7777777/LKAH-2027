@@ -206,6 +206,24 @@ td:first-child{font-weight:500;white-space:nowrap}
 body.editing [data-ed]{outline:1px dashed var(--o-pale);outline-offset:3px;border-radius:2px}
 body.editing [data-ed]:focus{outline:2px solid var(--o);background:var(--surface)}
 
+@media print{
+  :root{--bg:#fff;--surface:#F7EFE5;--ink:#1a1206;--ink-2:#3f3225;--ink-3:#6b5d4d;
+        --rule:#d8cbb8;--o:#C05A12;--o-deep:#8A3608;--o-pale:#E8C49A;--on-o:#fff}
+  body{background:#fff}
+  .editbar,.toolbar,nav.mini,.tasks .ctl,.accfoot,.edithint{display:none !important}
+  .acc .accbody{display:block !important}
+  .acctoggle{pointer-events:none}
+  .acctoggle .chev{display:none}
+  .tasks select{border:0;background:none;-webkit-appearance:none;appearance:none;color:#8A3608;padding:0}
+  .line,.q,.jstage,.aicell,.prio li,.acc{break-inside:avoid;page-break-inside:avoid}
+  .band{break-before:auto}
+  h1{font-size:28pt}
+  .aimbox{color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rstrip div,.pillars div,.jstage,.aicell,.cell.goal,.base{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{text-decoration:none;color:inherit}
+  @page{margin:14mm}
+}
+
 footer{margin-top:50px;border-top:1px solid var(--rule);padding:18px 0 90px;font-size:.8rem;color:var(--ink-3)}
 </style>
 </head>
@@ -568,6 +586,7 @@ footer{margin-top:50px;border-top:1px solid var(--rule);padding:18px 0 90px;font
 <div class="editbar" id="editbar">
   <button id="edtoggle">編輯文字</button>
   <button id="export">匯出檔案</button>
+  <button id="printbtn">列印／PDF</button>
   <button id="revert" title="清除所有修改，回到原始版本">還原</button>
   <span class="st" id="edstat"></span>
 </div>
@@ -830,17 +849,46 @@ footer{margin-top:50px;border-top:1px solid var(--rule);padding:18px 0 90px;font
       +'<style>'+css+'</style></head><body><div class="wrap">'+c.innerHTML+'</div></body></html>';
   }
 
+  async function tryDownloads(html,name){
+    try{
+      if(typeof claude==='undefined'||!claude||typeof claude.use!=='function') return false;
+      var dl=await claude.use('downloads');
+      if(!dl||typeof dl.save!=='function') return false;
+      await dl.save({filename:name,data:html});
+      return true;
+    }catch(e){ return false; }
+  }
+  function tryBlob(html,name){
+    try{
+      var b=new Blob(['\ufeff'+html],{type:'text/html;charset=utf-8'});
+      var u=URL.createObjectURL(b);
+      var a=document.createElement('a'); a.href=u; a.download=name; a.rel='noopener';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ a.remove(); URL.revokeObjectURL(u); },3000);
+      return true;
+    }catch(e){ return false; }
+  }
+  function tryWindow(html){
+    try{
+      var w=window.open('','_blank');
+      if(!w) return false;
+      w.document.open(); w.document.write(html); w.document.close();
+      return true;
+    }catch(e){ return false; }
+  }
+
   document.getElementById('export').addEventListener('click',async function(){
     var html=buildFile(), name='2027改善主題與執行計畫.html';
-    try{
-      var dl=await claude.use('downloads');
-      if(dl){ await dl.save({filename:name,data:html}); flash('已匯出'); return; }
-    }catch(e){ flash('匯出未完成'); return; }
-    try{
-      var b=new Blob([html],{type:'text/html'});
-      var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name;
-      document.body.appendChild(a); a.click(); a.remove(); flash('已匯出');
-    }catch(e){ flash('此環境無法匯出'); }
+    flash('匯出中…');
+    if(await tryDownloads(html,name)){ flash('已匯出'); return; }
+    if(tryBlob(html,name)){ flash('已匯出，請查看下載資料夾'); return; }
+    if(tryWindow(html)){ flash('已開新分頁，請用瀏覽器另存'); return; }
+    flash('無法自動匯出，請改用「列印／PDF」');
+  });
+
+  document.getElementById('printbtn').addEventListener('click',function(){
+    document.querySelectorAll('.acc').forEach(function(a){ a.classList.add('on'); });
+    setTimeout(function(){ window.print(); },120);
   });
 })();
 </script>
